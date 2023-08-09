@@ -1,3 +1,4 @@
+from PIL import Image
 import os
 import argparse
 import torch
@@ -7,7 +8,7 @@ from torch.utils.data import Dataset, DataLoader
 from multiprocessing import Pool
 from tqdm import tqdm
 import glob
-import cv2
+import numpy as np
 
 from cleanfid import fid
 from pytorch_msssim import MS_SSIM
@@ -64,14 +65,14 @@ class ImageDataset(Dataset):
 
     def loader_real(self, path):
         if self.real_downscale_rate is not None:
-            return imresize(cv2.imread(path),
+            return imresize(np.array(Image.open(path)),
                             scalar_scale=1 / self.real_downscale_rate).transpose(2, 0, 1)
         else:
-            return cv2.imread(path).transpose(2, 0, 1)
+            return np.array(Image.open(path)).transpose(2, 0, 1)
 
     @staticmethod
     def loader_fake(path):
-        return cv2.imread(path).transpose(2, 0, 1)
+        return np.array(Image.open(path)).transpose(2, 0, 1)
 
     def load_real_imgs_to_RAM(self):
         if self.use_pool:
