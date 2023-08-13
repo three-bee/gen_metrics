@@ -10,7 +10,6 @@ from tqdm import tqdm
 import glob
 import numpy as np
 
-from cleanfid import fid
 from pytorch_msssim import MS_SSIM
 
 from model_irse import IR_101
@@ -18,6 +17,9 @@ from mtcnn.mtcnn import MTCNN
 from lpips.lpips import LPIPS
 from imresize import imresize
 
+from inception import build_inception_model
+from fid import compute_fid
+from cleanfid import fid
 
 class ImageDataset(Dataset):
     """
@@ -111,15 +113,23 @@ class Metrics:
 
         self.lpips_module = LPIPS(net_type='alex')
         self.ms_ssim_module = MS_SSIM(data_range=1, size_average=True, channel=3)
+        
         self.facenet = IR_101(input_size=112)
         self.facenet.load_state_dict(torch.load(curr_face_ckpt, map_location=torch.device('cpu')))
         self.facenet.eval()
         self.mtcnn = MTCNN()
 
+        self.inception_model = build_inception_model(align_tf=True).cuda()
+        self.fake_inception_feats = []
+        self.real_inception_feats = []
+
         self.id_transform = trans.Compose([
             trans.ToTensor(),
             trans.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])  # [-1,1] --> [0,1]
         ])
+
+        self.imagenet_normalization = trans.Normalize(mean=[0.485, 0.456, 0.406],
+                                                      std=[0.229, 0.224, 0.225])
 
     # TODO: MTCNN backbone uses PIL which prevents from using .cuda() & larger batches than size 1
     def calc_id(self, X, Y):
@@ -155,6 +165,15 @@ class Metrics:
     def calc_mse(self, X, Y):
         return float(torch.mean(torch.square(X - Y)))
 
+    def extract_inception_feats(self, X, Y):
+        with torch.no_grad():
+            self.real_inception_feats.append(self.inception_model(X).cpu().numpy())
+            self.fake_inception_feats.append(self.inception_model(Y).cpu().numpy())
+    
+    def calc_fid(self):
+        self.fake_inception_feats = np.array(self.fake_inception_feats).reshape(-1,2048)
+        self.real_inception_feats = np.array(self.real_inception_feats).reshape(-1,2048)
+        return compute_fid(self.fake_inception_feats, self.real_inception_feats)
 
 def calc_metrics(opt):
     scores = {'id': [],
@@ -177,9 +196,12 @@ def calc_metrics(opt):
         scores['ms_ssim'].append(metrics.calc_ms_ssim(real, fake))
         scores['mse'].append(metrics.calc_mse(real, fake))
         scores['lpips'].append(metrics.calc_lpips(real, fake))
+        
+        metrics.extract_inception_feats(real, fake)
 
+    scores['fid'].append(metrics.calc_fid())
     # Set FID aside since its data loader is different
-    scores['fid'].append(fid.compute_fid(opt.real_path, opt.fake_path))
+    #scores['fid'].append(fid.compute_fid(opt.real_path, opt.fake_path, device=torch.device('cpu')))
 
     scores = {key: sum(value) / len(value) for key, value in scores.items()}
     print(scores)
