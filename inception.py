@@ -78,7 +78,7 @@ def build_inception_model(align_tf=True):
         model_url = model_urls['inception_v3_google']
     model = Inception3(num_classes=num_classes,
                        aux_logits=False,
-                       transform_input=False,
+                       transform_input=True,
                        align_tf=align_tf)
     state_dict = load_state_dict_from_url(model_url)
     model.load_state_dict(state_dict, strict=False)
