@@ -73,11 +73,11 @@ class ImageDataset(Dataset):
         return img_names
     
     @staticmethod
-    def list_all_imgs(out_path, ext='.png'):
+    def list_all_imgs(out_path, ext=['.png', '.jpg', 'jpeg']):
         img_paths = []
         for root, dirs, files in os.walk(out_path):
             for file in files:
-                if file.endswith(ext):
+                if any([file.lower().endswith(x) for x in ext]):
                     img_paths.append(os.path.join(root, file))
         return sorted(img_paths)
 
@@ -134,7 +134,7 @@ class Metrics:
         self.facenet.eval()
         self.mtcnn = MTCNN()
 
-        self.inception_model = build_inception_model(align_tf=True).cuda()
+        self.inception_model = build_inception_model(align_tf=True, transform_input=True).cuda()
         self.fake_inception_feats = []
         self.real_inception_feats = []
         if view_list is not None:
@@ -234,8 +234,7 @@ def calc_metrics(opt):
     scores = {key: sum(value) / len(value) for key, value in scores.items()}
     print(scores)
 
-def calc_metrics_multiview(opt, 
-                           views=['left_60', 'left_30', 'front', 'right_30', 'right_60', 'down', 'top']):
+def calc_metrics_multiview(opt, views=['left_60', 'left_30', 'front', 'right_30', 'right_60', 'down', 'top']):
     scores = {key:{'id': [],
                    'ms_ssim': [],
                    'mse': [],
@@ -285,10 +284,16 @@ def get_opts():
     parser.add_argument('--curr_face_ckpt', type=str, help='Path to Curricular Face backbone ckpt for ID metric',
                         default='./pretrained/CurricularFace_Backbone.pth')
     parser.add_argument('--downscale_rate', type=int, help='Downscale rate of real images', default=2)
+    parser.add_argument("--calc_multiview", action="store_true", default=False)
     return parser.parse_args()
 
 
 if __name__ == '__main__':
     opts = get_opts()
-    calc_metrics(opts)
-    #calc_metrics_multiview(opts)
+    # Calculates the metric scores for each subset, where the views arg constitute the subsets
+    # Each subset has the images whose names also include the substring in views array
+    if opts.calc_multiview:
+        calc_metrics_multiview(opts, views=['left_60', 'left_30', 'front', 'right_30', 'right_60', 'down', 'top'])
+    else:
+        calc_metrics(opts)
+    

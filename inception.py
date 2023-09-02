@@ -58,7 +58,7 @@ InceptionOutputs.__annotations__ = {'logits': torch.Tensor, 'aux_logits': Option
 _InceptionOutputs = InceptionOutputs
 
 
-def build_inception_model(align_tf=True):
+def build_inception_model(align_tf=True, transform_input=True):
     """Builds Inception V3 model.
 
     This model is particular used for inference, such that `requires_grad` and
